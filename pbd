@@ -1,0 +1,119 @@
+set serveroutput on size 20000 format word_wrapped;
+
+create or replace procedure rez(cod_c in number, cnp in number, nume in varchar2, adresa in varchar2, pret in number) is
+
+no_free_space exception;
+nrlib number;
+
+pragma exception_init(no_free_space, -2);
+
+begin
+    select nrlibere into nrlib from curse where codc = cod_c;
+    
+    if(nrlib - 1 < 0) then
+        raise no_free_space;
+    end if;
+    
+    update curse set nrlibere = nrlibere - 1, nrloc = nrloc + 1 where codc = cod_c;
+    insert into pasager values (cod_c, cnp, nume, adresa, pret);
+exception
+    when no_data_found then
+        dbms_output.put_line('invalid route');
+        
+    when no_free_space then
+        dbms_output.put_line('no free spots available');
+        
+    when dup_val_on_index then
+        dbms_output.put_line('passenger already booked');
+end;
+/
+
+
+begin
+    rez(1, 911, 'nume', 'bucharest', 500);
+end;
+/
+
+create or replace procedure afis(codc_v in number) is
+cursor cursa is select c.*, t.nume from curse c, tehnic t where c.codc = codc_v and t.cod = c.codp;
+
+cursa_row cursa%ROWTYPE;
+total number;
+
+cursor pasageri is select * from pasager where codc = codc_v;
+
+pasager_row pasageri%ROWTYPE;
+invalid_codc exception; 
+no_data_found exception;
+
+pragma exception_init(invalid_codc, -1);
+
+begin
+    if (codc_v < 0) then
+        raise invalid_codc;
+    end if;
+    
+    open cursa;
+    fetch cursa into cursa_row;
+    if cursa%notfound then
+        raise no_data_found;
+    end if;
+    
+    dbms_output.put_line('Cursa: ' || cursa_row.codc);
+    dbms_output.put_line('Pilot: ' || cursa_row.nume);
+    dbms_output.put_line('Nr. Locuri Ocupate: ' || cursa_row.nrloc);
+    dbms_output.put_line('Nr. Locuri Libere: ' || cursa_row.nrlibere);
+    dbms_output.put_line('Ora Decolare: ' || cursa_row.ora_dec);
+    dbms_output.put_line('Ora Aterizare: ' || cursa_row.ora_ater);
+    close cursa;
+    
+    open pasageri;
+    fetch pasageri into pasager_row;
+    dbms_output.put_line('Pasageri:');
+    loop
+        exit when pasageri%notfound;
+        dbms_output.put_line('CNP: ' || pasager_row.cnp || ' Nume: ' || pasager_row.nume || ' Adresa: ' || pasager_row.adresa || ' Pret: ' || pasager_row.pret);
+        fetch pasageri into pasager_row;
+    end loop;
+    
+    select SUM(pret) into total from pasager where codc = codc_v;
+    dbms_output.put_line('TOTAL CURSA: ' || total );
+exception 
+    when invalid_codc then
+        dbms_output.put_line('CODC must be greater than zero and lower than 100!'); 
+    
+    when no_data_found then 
+        dbms_output.put_line('route id not found'); 
+end;
+/
+
+
+begin
+    afis(1);
+end;
+/
+
+
+create or replace procedure stat(n in number) as
+cursor cursa is
+    select B.codc, A.oras_dec, A.oras_ater, sum(B.pret) as suma, count(*) as nr_pasageri from curse A join pasager B on A.codc = B.codc group by B.codc, A.oras_dec, A.oras_ater having count(*) > n;
+
+cursa_row cursa%ROWTYPE;
+
+begin
+    open cursa;
+    fetch cursa into cursa_row;
+    dbms_output.put_line('lista pasageri:');
+    loop
+        exit when cursa%NOTFOUND;
+        dbms_output.put_line  ('codc: ' || cursa_row.codc || ' oras_dec: ' || cursa_row.oras_dec  || ' oras_ater: ' || cursa_row.oras_ater || ' suma incasari: ' || cursa_row.suma || ' nr pasageri: ' || cursa_row.nr_pasageri);
+        fetch cursa into cursa_row;
+    end loop;
+end;
+/
+
+
+begin
+    stat(1);
+end;
+/
